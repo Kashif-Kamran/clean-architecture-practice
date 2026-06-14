@@ -1,14 +1,16 @@
 // =============================================================================
 // LAYER: Application (use case)
-// MAY IMPORT: domain entities, domain errors, application ports
-// MUST NOT IMPORT: NestJS decorators, TypeORM, HTTP types, ORM entities
+// MAY IMPORT: @Injectable/@Inject from @nestjs/common (DI metadata only),
+//             domain entities, domain errors, application ports
+// MUST NOT IMPORT: TypeORM, HTTP decorators, ORM entities
 // =============================================================================
 
+import { Injectable, Inject } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { Variant } from '../../domain/entities/variant.entity';
 import { NotFoundError } from '../../domain/errors/not-found.error';
-import { ModelRepositoryPort } from '../ports/model-repository.port';
-import { VariantRepositoryPort } from '../ports/variant-repository.port';
+import { MODEL_REPOSITORY, type ModelRepositoryPort } from '../ports/model-repository.port';
+import { VARIANT_REPOSITORY, type VariantRepositoryPort } from '../ports/variant-repository.port';
 
 export interface CreateVariantInput {
   modelId: string;
@@ -18,38 +20,28 @@ export interface CreateVariantInput {
   priceMsrp: number;
 }
 
+@Injectable()
 export class CreateVariantUseCase {
   constructor(
-    private readonly modelRepo: ModelRepositoryPort,
-    private readonly variantRepo: VariantRepositoryPort,
+    @Inject(MODEL_REPOSITORY)   private readonly modelRepo: ModelRepositoryPort,
+    @Inject(VARIANT_REPOSITORY) private readonly variantRepo: VariantRepositoryPort,
   ) {}
 
   async execute(input: CreateVariantInput): Promise<Variant> {
-    // Orchestration: ensure the referenced Model exists.
     const model = await this.modelRepo.findById(input.modelId);
-    if (!model) {
-      throw new NotFoundError('Model', input.modelId);
-    }
+    if (!model) throw new NotFoundError('Model', input.modelId);
 
-    // Domain entity constructor enforces all three Variant invariants:
-    //   - engineCc > 0         → InvalidVariantError
-    //   - priceMsrp >= 0       → InvalidVariantError
-    //   - year in valid range  → InvalidVariantError
-    //
-    // If any rule is violated, execution stops here with a DomainError.
-    // The use case does NOT catch it — it lets it propagate to the controller,
-    // which maps it to a 400 HTTP response via the global exception filter.
+    // Domain constructor enforces engineCc > 0, priceMsrp >= 0, year in range.
     const variant = new Variant(
       randomUUID(),
       input.modelId,
       input.name,
       input.year,
-      input.engineCc,    // ← throws if <= 0
-      input.priceMsrp,   // ← throws if < 0
+      input.engineCc,
+      input.priceMsrp,
     );
 
     await this.variantRepo.save(variant);
-
     return variant;
   }
 }

@@ -1,34 +1,38 @@
 // =============================================================================
 // LAYER: Application (use case)
-// MAY IMPORT: domain entities, domain errors, application ports
-// MUST NOT IMPORT: NestJS decorators, TypeORM, HTTP types, ORM entities
+// MAY IMPORT: @Injectable/@Inject from @nestjs/common (DI metadata only),
+//             domain entities, domain errors, application ports
+// MUST NOT IMPORT: TypeORM, HTTP decorators, ORM entities
 //
-// A USE CASE orchestrates domain objects and ports to fulfill ONE user intent.
-// It contains NO business rules (those live in domain entities).
-// It contains NO infrastructure code (that lives in the adapter/repository).
+// TRADEOFF: @Injectable() + @Inject() are metadata decorators — they don't
+// couple this class to NestJS runtime behaviour, only to the DI container.
+// The payoff: the module lists this class directly instead of a factory provider.
 //
-// Notice: no @Injectable() here. This class is a plain TS class.
-// NestJS DI is wired in catalog.module.ts using a factory provider.
+// WHY @Inject(MAKE_REPOSITORY) is required:
+//   TypeScript metadata reflection can resolve CLASS tokens automatically.
+//   SYMBOL tokens (like MAKE_REPOSITORY) are invisible to the type system at
+//   runtime — @Inject() is how we tell NestJS which provider to use.
 // =============================================================================
 
-import { randomUUID } from 'crypto'; // Node built-in — not a framework import
+import { Injectable, Inject } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { Make } from '../../domain/entities/make.entity';
-import { MakeRepositoryPort } from '../ports/make-repository.port';
+import { MAKE_REPOSITORY, type MakeRepositoryPort } from '../ports/make-repository.port';
 
 export interface CreateMakeInput {
   name: string;
   countryOfOrigin: string;
 }
 
+@Injectable()
 export class CreateMakeUseCase {
-  // The use case depends on the PORT (interface), never on the adapter (class).
-  constructor(private readonly makeRepo: MakeRepositoryPort) {}
+  constructor(
+    @Inject(MAKE_REPOSITORY) private readonly makeRepo: MakeRepositoryPort,
+  ) {}
 
   async execute(input: CreateMakeInput): Promise<Make> {
     const make = new Make(randomUUID(), input.name, input.countryOfOrigin);
-
     await this.makeRepo.save(make);
-
     return make;
   }
 }

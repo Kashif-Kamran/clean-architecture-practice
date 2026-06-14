@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { CatalogModule } from './modules/catalog/catalog.module';
+import { BookingsModule } from './modules/bookings/bookings.module';
 
 // ORM entities — TypeORM needs them at the root level for schema sync
 import { MakeOrmEntity } from './modules/catalog/infrastructure/persistence/entities/make.orm-entity';
@@ -31,6 +32,7 @@ import { VariantOrmEntity } from './modules/catalog/infrastructure/persistence/e
     }),
 
     CatalogModule,
+    BookingsModule,
   ],
 })
 export class AppModule {}
