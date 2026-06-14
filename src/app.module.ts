@@ -1,17 +1,13 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { UserModule } from './modules/user/user.module';
+import { AuthModule } from './modules/auth/auth.module';
 import { CatalogModule } from './modules/catalog/catalog.module';
 import { BookingsModule } from './modules/bookings/bookings.module';
 
-// ORM entities — TypeORM needs them at the root level for schema sync
-import { MakeOrmEntity } from './modules/catalog/infrastructure/persistence/entities/make.orm-entity';
-import { ModelOrmEntity } from './modules/catalog/infrastructure/persistence/entities/model.orm-entity';
-import { VariantOrmEntity } from './modules/catalog/infrastructure/persistence/entities/variant.orm-entity';
-
 @Module({
   imports: [
-    // Load .env into process.env; isGlobal means no need to import ConfigModule elsewhere
     ConfigModule.forRoot({ isGlobal: true }),
 
     TypeOrmModule.forRootAsync({
@@ -23,14 +19,17 @@ import { VariantOrmEntity } from './modules/catalog/infrastructure/persistence/e
         username: config.get<string>('DB_USERNAME', 'postgres'),
         password: config.get<string>('DB_PASSWORD', 'postgres'),
         database: config.get<string>('DB_DATABASE', 'bikebook'),
-        entities: [MakeOrmEntity, ModelOrmEntity, VariantOrmEntity],
+        // autoLoadEntities: each feature module registers its own ORM entities
+        // via TypeOrmModule.forFeature() — no manual entity list needed here.
+        autoLoadEntities: true,
         // ⚠️  synchronize: true auto-creates/alters tables from entity definitions.
-        // NEVER use this in production — it can silently drop columns.
-        // Use migrations instead (TypeORM `migration:generate` / `migration:run`).
+        // NEVER use this in production — use TypeORM migrations instead.
         synchronize: true,
       }),
     }),
 
+    UserModule,
+    AuthModule,
     CatalogModule,
     BookingsModule,
   ],
