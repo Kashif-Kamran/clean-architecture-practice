@@ -4,7 +4,15 @@
 // MUST NOT IMPORT: domain entities directly, TypeORM, ORM entities, mappers
 // =============================================================================
 
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Post,
+} from '@nestjs/common';
 import { CreateVariantUseCase } from '../../../application/use-cases/create-variant.use-case';
 import { GetVariantByIdUseCase } from '../../../application/use-cases/get-variant-by-id.use-case';
 import { GetVariantDetailUseCase } from '../../../application/use-cases/get-variant-detail.use-case';

@@ -13,12 +13,30 @@ import {
   ArgumentsHost,
   Catch,
   ExceptionFilter,
+  HttpException,
   HttpStatus,
   Logger,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
 
-/** Shape we expect on caught domain errors (matches DomainError base class). */
+// =============================================================================
+// Three kinds of exceptions flow through this filter:
+//
+//  1. Domain errors   — thrown by use cases / domain entities when a business
+//                       rule is violated (NotFoundError, InvalidVariantError…).
+//                       Detected via the `isDomainError` sentinel flag.
+//
+//  2. HttpExceptions  — thrown by NestJS itself or Passport:
+//                         • ValidationPipe      → BadRequestException (400)
+//                         • JwtAuthGuard        → UnauthorizedException (401)
+//                         • any guard/interceptor that calls `throw new ForbiddenException()`
+//                       These must be passed through as-is; we must NOT convert
+//                       them to 500 just because they are not domain errors.
+//
+//  3. Unexpected bugs — null refs, missing env vars, etc.
+//                       These become 500 Internal Server Error and are logged.
+// =============================================================================
+
 interface CaughtDomainError {
   isDomainError: true;
   statusCode: number;
@@ -43,8 +61,8 @@ export class DomainExceptionFilter implements ExceptionFilter {
     const response = ctx.getResponse<Response>();
     const request = ctx.getRequest<Request>();
 
+    // ── 1. Domain error ───────────────────────────────────────────────────────
     if (isDomainError(exception)) {
-      // A business rule was violated — return 4xx to the client
       response.status(exception.statusCode).json({
         statusCode: exception.statusCode,
         error: exception.name,
@@ -54,7 +72,24 @@ export class DomainExceptionFilter implements ExceptionFilter {
       return;
     }
 
-    // Unknown error — log it and return 500
+    // ── 2. NestJS / framework HttpException ───────────────────────────────────
+    // ValidationPipe, guards, Passport, and any code that throws `new NotFoundException()`
+    // etc. all produce HttpException. Pass the status and body through unchanged.
+    if (exception instanceof HttpException) {
+      const status = exception.getStatus();
+      const body = exception.getResponse();
+
+      response.status(status).json(
+        // getResponse() returns either a plain string or an object
+        // (ValidationPipe returns an object with `message: string[]`).
+        typeof body === 'string'
+          ? { statusCode: status, message: body, path: request.url }
+          : { ...(body as object), path: request.url },
+      );
+      return;
+    }
+
+    // ── 3. Unexpected error (bug) ─────────────────────────────────────────────
     this.logger.error(exception);
     response.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
       statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
